@@ -29,7 +29,8 @@ except:
 # -----------------------------------------------------------------------------
 # Cache functions
 # -----------------------------------------------------------------------------
-def has_cache_expired(timestamp_str):
+# Bug 1: missing one parameter "expire_in_days"
+def has_cache_expired(timestamp_str, expire_in_days):
     """Check if cache timestamp is over expire_in_days old"""
     # gives current datetime
     now = datetime.now()
@@ -43,10 +44,11 @@ def has_cache_expired(timestamp_str):
 
     # now that we have days as integers, we can just use comparison
     # and decide if cache has expired or not
+    # Bug 2: should return True for expire
     if delta_in_days > expire_in_days:
-        return False
-    else:
         return True
+    else:
+        return False
 
 
 def get_from_cache(url):
@@ -54,7 +56,9 @@ def get_from_cache(url):
     if url in CACHE_DICTION:
         url_dict = CACHE_DICTION[url]
 
-        if has_cache_expired(url_dict['timestamp'], url_dict['expire_in_days']):
+        if has_cache_expired(
+                url_dict['timestamp'],
+                url_dict['expire_in_days']):
             # also remove old copy from cache
             del CACHE_DICTION[url]
             html = None
@@ -111,7 +115,9 @@ def get_html_from_url(url, expire_in_days=7):
 # Let's parse NYTimes Today's Paper
 # -----------------------------------------------------------------------------
 
-todays_paper_html = get_html_from_url("http://www.nytimes.com/pages/todayspaper/index.html", expire_in_days=1)
+todays_paper_html = get_html_from_url(
+    "http://www.nytimes.com/pages/todayspaper/index.html",
+    expire_in_days=1)
 todays_soup = Soup(todays_paper_html, 'html.parser')
 
 # 1. Section Articles
@@ -119,12 +125,15 @@ todays_soup = Soup(todays_paper_html, 'html.parser')
 
 # We design it by starting with only the front page section,
 # and then generalize it for every section
+
+
 def load_articles_from_section(section_soup):
     story_list = []
     stories = section_soup.find_all('div', {'class': 'story'})
     for story_soup in stories:
         story_dict = extract_data_from_story_item(story_soup)
-        story_dict['related_articles'] = extract_related_articles(story_dict['url'])
+        story_dict['related_articles'] = extract_related_articles(story_dict[
+                                                                  'url'])
         story_list.append(story_dict)
 
         if DEBUG:
@@ -133,12 +142,15 @@ def load_articles_from_section(section_soup):
             print(story_dict['summary'])
             print("Has Thumbnail: ", story_dict['thumbnail'] and True or False)
             print("Has URL:", story_dict['url'] and True or False)
-            print("# of related articles:", len(story_dict['related_articles']))
+            print(
+                "# of related articles:", len(
+                    story_dict['related_articles']))
             print()
-            print('-'*10)
+            print('-' * 10)
             print()
 
     return story_list
+
 
 def extract_data_from_story_item(story_soup):
     title = story_soup.find('h3').text.strip()
@@ -174,19 +186,22 @@ def extract_data_from_story_item(story_soup):
 # 1.1 Section Articles with Headlines Only
 # ======================================== #
 
+
 def load_articles_from_headlines_only(section_soup):
     story_list = []
     stories = section_soup.find_all('li')
     for story_soup in stories:
+     # BUG 3 and 4: duplicate author and unwanted information
         story_dict = {
-            'title': story_soup.find('h6').text.strip(),
+            'title': story_soup.find('h6').find('a').text.strip(),
             'url': story_soup.find('a').get('href')
         }
 
         byline_tag = story_soup.find('div', {'class': 'byline'})
         story_dict['byline'] = byline_tag.text.strip() if byline_tag else None
 
-        story_dict['related_articles'] = extract_related_articles(story_dict['url'])
+        story_dict['related_articles'] = extract_related_articles(story_dict[
+                                                                  'url'])
         story_list.append(story_dict)
 
         if DEBUG:
@@ -194,9 +209,11 @@ def load_articles_from_headlines_only(section_soup):
             if story_dict.get('byline'):
                 print(story_dict['byline'])
             print("Has URL:", story_dict['url'] and True or False)
-            print("# of related articles:", len(story_dict['related_articles']))
+            print(
+                "# of related articles:", len(
+                    story_dict['related_articles']))
             print()
-            print('-'*10)
+            print('-' * 10)
             print()
 
     return story_list
@@ -204,12 +221,14 @@ def load_articles_from_headlines_only(section_soup):
 # 2. Related Articles
 # =================== #
 
+
 def extract_related_articles(url):
     related_coverage_list = []
 
     story_html = get_html_from_url(url)
     story_soup = Soup(story_html, 'html.parser')
-    related_soup = story_soup.find('aside', {'class': 'related-combined-coverage-marginalia'})
+    related_soup = story_soup.find(
+        'aside', {'class': 'related-combined-coverage-marginalia'})
 
     if related_soup:
         for article_soup in related_soup.find_all('li'):
@@ -237,19 +256,24 @@ def extract_data_from_related_article(article_soup):
 # 3. It all comes together here / or everything starts here
 # ========================================================= #
 
-if DEBUG: print('The Front Page'.upper())
+if DEBUG:
+    print('The Front Page'.upper())
 front_page_soup = todays_soup.find('div', {'class': 'aColumn'})
 load_articles_from_section(front_page_soup)
-load_articles_from_headlines_only(front_page_soup.find('ul', {'class': 'headlinesOnly'}))
+load_articles_from_headlines_only(
+    front_page_soup.find(
+        'ul', {
+            'class': 'headlinesOnly'}))
 
 other_sections = todays_soup.find('div', {'id': 'SpanABMiddleRegion'})
 for section_soup in other_sections.find_all('ul', {'class': 'headlinesOnly'}):
-    section_title = section_soup.parent.find('h3', {'class': 'sectionHeader'}).text.strip()
+    section_title = section_soup.parent.find(
+        'h3', {'class': 'sectionHeader'}).text.strip()
     if DEBUG:
         print()
-        print('='*len(section_title))
+        print('=' * len(section_title))
         print(section_title.upper())
-        print('='*len(section_title))
+        print('=' * len(section_title))
         print()
 
     load_articles_from_headlines_only(section_soup)
